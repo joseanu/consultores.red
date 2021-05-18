@@ -1,0 +1,18 @@
+{
+	"name": "consultores.red",
+	"version": "1.0.0",
+	"main": "index.html",
+	"license": "MIT",
+	"dependencies": {
+		"@tailwindcss/jit": "^0.1.18",
+		"autoprefixer": "^10.2.5",
+		"postcss": "^8.2.10",
+		"tailwindcss": "^2.1.1",
+		"vite": "^2.1.5"
+	},
+	"scripts": {
+		"dev": "NODE_ENV=development vite",
+		"prod": "NODE_ENV=production vite build",
+		"preview": "vite preview"
+	}
+}
