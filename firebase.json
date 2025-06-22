@@ -1,0 +1,10 @@
+{
+  "hosting": {
+    "public": "/home/user/consultoresred",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ]
+  }
+}
