@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Gestión de Proyectos RΞD</title>
+    <!-- Cytoscape JS Core -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.26.0/cytoscape.min.js"></script>
+    <!-- Dagre Layout for hierarchical flow -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dagre/0.8.5/dagre.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/cytoscape-dagre@2.5.0/cytoscape-dagre.min.js"></script>
+    <!-- Fonts & Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        :root {
+            --bg-color: #121212;
+            --panel-color: #1e1e1e;
+            --text-main: #ffffff;
+            --text-sec: #a0a0a0;
+            --red-cyan: #06b4ba;
+            --red-pink: #e50774;
+            --red-blue: #1e6eb6;
+            --border-color: #333;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--bg-color);
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+            color: var(--text-main);
+        }
+
+        /* Header */
+        header {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        h1 {
+            margin: 0;
+            font-weight: 700;
+            font-size: 24px;
+            letter-spacing: -0.5px;
+        }
+        
+        .brand {
+            color: var(--text-main);
+        }
+        .brand span { color: var(--red-cyan); }
+
+        .legend {
+            display: flex;
+            gap: 15px;
+            margin-top: 10px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .dot { width: 10px; height: 10px; border-radius: 50%; }
+        .dot.design { background-color: var(--red-blue); box-shadow: 0 0 8px var(--red-blue); }
+        .dot.precon { background-color: var(--red-cyan); box-shadow: 0 0 8px var(--red-cyan); }
+        .dot.const { background-color: var(--red-pink); box-shadow: 0 0 8px var(--red-pink); }
+        .dot.post { background: linear-gradient(45deg, var(--red-blue), var(--red-pink)); }
+
+        /* Graph Container */
+        #cy {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* Sidebar / Inspector */
+        #inspector {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            bottom: 20px;
+            width: 350px;
+            background: rgba(30, 30, 30, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            box-shadow: -10px 0 30px rgba(0,0,0,0.5);
+            z-index: 20;
+            transform: translateX(120%);
+            transition: transform 0.4s cubic-bezier(0.19, 1, 0.22, 1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        #inspector.active {
+            transform: translateX(0);
+        }
+
+        .inspector-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border-color);
+            background: linear-gradient(90deg, rgba(6,180,186,0.1) 0%, rgba(30,30,30,0) 100%);
+        }
+
+        .inspector-header h2 {
+            margin: 0;
+            font-size: 18px;
+            color: var(--red-cyan);
+        }
+
+        .inspector-header .code {
+            font-size: 12px;
+            color: var(--text-sec);
+            margin-top: 4px;
+            font-family: monospace;
+            background: #000;
+            padding: 2px 6px;
+            border-radius: 4px;
+            display: inline-block;
+        }
+
+        .inspector-body {
+            padding: 20px;
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+
+        .io-section {
+            margin-bottom: 25px;
+        }
+
+        .io-title {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-sec);
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .io-title i { color: var(--red-pink); }
+        .io-title.output i { color: var(--red-cyan); }
+
+        .io-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .io-item {
+            background: #252525;
+            margin-bottom: 8px;
+            padding: 10px;
+            border-radius: 6px;
+            border-left: 3px solid transparent;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.2s;
+        }
+
+        .io-item:hover {
+            background: #2a2a2a;
+            transform: translateX(2px);
+        }
+
+        .io-item.input { border-left-color: var(--red-pink); }
+        .io-item.output { border-left-color: var(--red-cyan); }
+
+        .artifact-icon {
+            color: #666;
+            font-size: 12px;
+        }
+
+        .close-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: none;
+            border: none;
+            color: var(--text-sec);
+            cursor: pointer;
+            font-size: 16px;
+        }
+        
+        .close-btn:hover { color: white; }
+
+        /* Instruction overlay */
+        .instruction {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: var(--text-sec);
+            font-size: 12px;
+            background: rgba(0,0,0,0.5);
+            padding: 8px 16px;
+            border-radius: 20px;
+            pointer-events: none;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.5; }
+            50% { opacity: 1; }
+            100% { opacity: 0.5; }
+        }
+
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1><span class="brand">RΞD <span>Consultores</span></span></h1>
+        <div style="font-size: 14px; color: #888; margin-bottom:5px;">Sistema de Gestión de Proyectos MINNA</div>
+        <div class="legend">
+            <div class="legend-item"><div class="dot design"></div>Diseño</div>
+            <div class="legend-item"><div class="dot precon"></div>Abastecimiento</div>
+            <div class="legend-item"><div class="dot const"></div>Construcción</div>
+            <div class="legend-item"><div class="dot post"></div>Cierre y Postventa</div>
+        </div>
+    </header>
+
+    <div id="cy"></div>
+
+    <div class="instruction">
+        <i class="fa-solid fa-computer-mouse"></i> Haz clic en un proceso para ver sus Inputs y Outputs
+    </div>
+
+    <!-- Inspector Panel -->
+    <div id="inspector">
+        <button class="close-btn" onclick="closeInspector()"><i class="fa-solid fa-xmark"></i></button>
+        <div class="inspector-header">
+            <h2 id="panel-title">Nombre del Proceso</h2>
+            <div id="panel-code" class="code">MIN-XXX-PRO-000</div>
+        </div>
+        <div class="inspector-body">
+            <div class="io-section">
+                <div class="io-title"><i class="fa-solid fa-right-to-bracket"></i> Inputs (Entradas)</div>
+                <ul class="io-list" id="input-list">
+                    <!-- Dynamic Items -->
+                </ul>
+            </div>
+            <div class="io-section">
+                <div class="io-title output"><i class="fa-solid fa-right-from-bracket"></i> Outputs (Salidas)</div>
+                <ul class="io-list" id="output-list">
+                    <!-- Dynamic Items -->
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Database of Processes (Nodes) and their specific I/O data
+        // Colors: Blue #1e6eb6, Cyan #06b4ba, Pink #e50774
+        
+        const processData = {
+            // DISEÑO
+            "MIN-PRE-PRO-01": {
+                title: "Planeación Inicial del Proyecto",
+                inputs: [],
+                outputs: ["One Page Plan", "Due Diligence", "Estudio de Mercado"],
+                category: "predesign"
+            },
+            // DISEÑO
+            "MIN-DIS-PRO-02": {
+                title: "Especificaciones de Diseño",
+                inputs: ["One Page Plan", "Due Diligence", "Estudio de Mercado"],
+                outputs: ["Documento de Especificaciones de Diseño"],
+                category: "design"
+            },
+            "MIN-DIS-PRO-03": {
+                title: "Declaración de Alcance y WBS",
+                inputs: ["Especificaciones de Diseño"],
+                outputs: ["Declaración de Alcance", "WBS (Estructura de Desglose)"],
+                category: "design"
+            },
+            "MIN-DIS-PRO-01": {
+                title: "Tramitología",
+                inputs: ["Programa Maestro", "Proyecto APC", "Documentos Legales"],
+                outputs: ["Licencias y Permisos", "Expediente Inmueble Habilitado"],
+                category: "design"
+            },
+            "MIN-DIS-PRO-04": {
+                title: "Coordinación de Diseño",
+                inputs: ["Especificaciones de Diseño", "WBS", "Contratos Asesores"],
+                outputs: ["Proyecto Ejecutivo APC (Aprobado para Construcción)"],
+                category: "design"
+            },
+            "MIN-DIS-PRO-05": {
+                title: "Presupuesto y Programa Base",
+                inputs: ["Declaración de Alcance", "WBS", "Especificaciones"],
+                outputs: ["Programa Maestro", "Presupuesto Base"],
+                category: "design"
+            },
+            "MIN-DIS-PRO-06": {
+                title: "Liberación Inicio de Obra",
+                inputs: ["Licencia Construcción", "Proyecto APC", "Seguros", "Plan Seguridad"],
+                outputs: ["Acta de Liberación para Inicio"],
+                category: "design"
+            },
+
+            // PRECONSTRUCCIÓN / ABASTECIMIENTO
+            "MIN-PRC-PRO-01": {
+                title: "Estrategia de Contratación",
+                inputs: ["WBS", "Presupuesto Base", "Programa Maestro"],
+                outputs: ["Programa de Abastecimientos Autorizado"],
+                category: "precon"
+            },
+            "MIN-PRC-PRO-02": {
+                title: "Concursos y Contratos",
+                inputs: ["Programa Abastecimientos", "Proyecto APC", "Presupuesto Base"],
+                outputs: ["Comparativas", "Contratos de Obra Firmados", "Fianzas"],
+                category: "precon"
+            },
+            "MIN-PRC-PRO-03": {
+                title: "Cotizaciones y Órdenes Trabajo",
+                inputs: ["Programa Abastecimientos", "Proyecto APC"],
+                outputs: ["Orden de Trabajo Firmada"],
+                category: "precon"
+            },
+            "MIN-PRC-PRO-04": {
+                title: "Compra de Insumos",
+                inputs: ["Requisición de Compra", "Presupuesto Base"],
+                outputs: ["Orden de Compra", "Expediente de Compra"],
+                category: "precon"
+            },
+            "MIN-PRC-PRO-05": {
+                title: "Kick-off de Obra",
+                inputs: ["Contrato Firmado", "Acta Liberación Inicio (DIS-06)", "Seguros"],
+                outputs: ["Minuta de Kick-off", "Bitácora Aperturada"],
+                category: "precon"
+            },
+
+            // CONSTRUCCIÓN
+            "MIN-CON-PRO-06": {
+                title: "Supervisión de Obra",
+                inputs: ["Proyecto APC", "Contratos", "Reglas de Avance (RAA)"],
+                outputs: ["Bitácora de Obra", "Reportes de Avance", "Actas Entrega Contratista"],
+                category: "const"
+            },
+            "MIN-CON-PRO-01": {
+                title: "Actualizar Avance y Cronograma",
+                inputs: ["Medición en Campo", "Reglas Acreditación (RAA)"],
+                outputs: ["Reporte Avance Físico Certificado (AFC)", "Cronograma Actualizado"],
+                category: "const"
+            },
+            "MIN-CON-PRO-04": {
+                title: "Gestión de Estimaciones",
+                inputs: ["Avance Físico Certificado (AFC)", "Contrato"],
+                outputs: ["Estimación Aprobada para Pago"],
+                category: "const"
+            },
+            "MIN-CON-PRO-02": {
+                title: "Programación de Pagos",
+                inputs: ["Estimaciones Aprobadas", "Facturas", "Calendario Pagos"],
+                outputs: ["Comprobantes de Pago", "Control de Flujo"],
+                category: "const"
+            },
+            "MIN-CON-PRO-05": {
+                title: "Control de Cambios",
+                inputs: ["Solicitud de Cambio", "Bitácora", "Presupuesto"],
+                outputs: ["Orden de Cambio (ODC)", "Presupuesto Actualizado"],
+                category: "const"
+            },
+            "MIN-CON-PRO-03": {
+                title: "Ministración",
+                inputs: ["Avance Físico Certificado", "Presupuesto Banco"],
+                outputs: ["Reporte de Ministración", "Recursos en Cuenta"],
+                category: "const"
+            },
+            "MIN-CON-PRO-07": {
+                title: "Presentación Avance Obra",
+                inputs: ["Reporte AFC", "Bitácora Supervisión", "Lookahead"],
+                outputs: ["Minuta de Acuerdos", "Plan Semanal"],
+                category: "const"
+            },
+            "MIN-CON-PRO-08": {
+                title: "Presentación Dirección",
+                inputs: ["Cierre Financiero", "SPI/CPI", "Informe Mensual"],
+                outputs: ["Decisiones Estratégicas", "Minuta Comité"],
+                category: "const"
+            },
+
+            // CIERRE
+            "MIN-CIE-PRO-06": {
+                title: "Entrega Áreas Comunes",
+                inputs: ["Notificación Término (Obra)", "Planos As-built"],
+                outputs: ["Acta Recepción Área Común", "Expediente Técnico"],
+                category: "post"
+            },
+            "MIN-CIE-PRO-05": {
+                title: "Entrega Áreas Privativas",
+                inputs: ["Inmueble Terminado", "Checklist Calidad"],
+                outputs: ["Acta Entrega Técnica a Postventa", "Punch List Cero"],
+                category: "post"
+            },
+            "MIN-CIE-PRO-02": {
+                title: "Cierre Administrativo",
+                inputs: ["Acta Entrega Contratista", "Conciliación Pagos"],
+                outputs: ["Acta Finiquito", "Fianza Vicios Ocultos"],
+                category: "post"
+            },
+            "MIN-CIE-PRO-01": {
+                title: "Titulación",
+                inputs: ["Unidad Vendida", "Expediente Cliente", "Régimen Condominio"],
+                outputs: ["Escritura Firmada", "Expediente Cerrado"],
+                category: "post"
+            },
+
+            // POSTVENTA
+            "MIN-POS-PRO-04": {
+                title: "Entrega de Inmueble (Cliente)",
+                inputs: ["Unidad Liberada (CIE-05)", "Escrituración (CIE-01)"],
+                outputs: ["Acta Entrega Cliente", "Inicio Garantía"],
+                category: "post"
+            },
+            "MIN-POS-PRO-01": {
+                title: "Atención al Cliente",
+                inputs: ["Cliente Escriturado"],
+                outputs: ["Alta en Plataforma", "Tickets de Servicio"],
+                category: "post"
+            },
+            "MIN-POS-PRO-02": {
+                title: "Incidencias y Garantías",
+                inputs: ["Reporte Cliente", "Póliza Garantía"],
+                outputs: ["Acta Cierre Incidencia", "Reparación Ejecutada"],
+                category: "post"
+            }
+        };
+
+        // Graph Structure (Nodes & Edges)
+        const elements = [
+            // NODES
+            // Predesign
+            { data: { id: 'PRE01', label: 'Planeación\nInicial', code: 'MIN-PRE-PRO-01', type: 'predesign' } },
+            // Design
+            { data: { id: 'DIS02', label: 'Especificaciones\nDiseño', code: 'MIN-DIS-PRO-02', type: 'design' } },
+            { data: { id: 'DIS03', label: 'Alcance y WBS', code: 'MIN-DIS-PRO-03', type: 'design' } },
+            { data: { id: 'DIS04', label: 'Coord. Diseño', code: 'MIN-DIS-PRO-04', type: 'design' } },
+            { data: { id: 'DIS05', label: 'Presupuesto y\nPrograma Base', code: 'MIN-DIS-PRO-05', type: 'design' } },
+            { data: { id: 'DIS01', label: 'Tramitología', code: 'MIN-DIS-PRO-01', type: 'design' } },
+            { data: { id: 'DIS06', label: 'Liberación\nInicio Obra', code: 'MIN-DIS-PRO-06', type: 'design' } },
+
+            // Precon
+            { data: { id: 'PRC01', label: 'Estrategia\nContratación', code: 'MIN-PRC-PRO-01', type: 'precon' } },
+            { data: { id: 'PRC02', label: 'Concursos y\nContratos', code: 'MIN-PRC-PRO-02', type: 'precon' } },
+            { data: { id: 'PRC03', label: 'Cotizaciones\ny OTs', code: 'MIN-PRC-PRO-03', type: 'precon' } },
+            { data: { id: 'PRC04', label: 'Compra\nInsumos', code: 'MIN-PRC-PRO-04', type: 'precon' } },
+            { data: { id: 'PRC05', label: 'Kick-off\nObra', code: 'MIN-PRC-PRO-05', type: 'precon' } },
+
+            // Construction
+            { data: { id: 'CON06', label: 'Supervisión\nde Obra', code: 'MIN-CON-PRO-06', type: 'const' } },
+            { data: { id: 'CON01', label: 'Avance y\nCronograma', code: 'MIN-CON-PRO-01', type: 'const' } },
+            { data: { id: 'CON04', label: 'Estimaciones', code: 'MIN-CON-PRO-04', type: 'const' } },
+            { data: { id: 'CON02', label: 'Pagos', code: 'MIN-CON-PRO-02', type: 'const' } },
+            { data: { id: 'CON05', label: 'Control de\nCambios', code: 'MIN-CON-PRO-05', type: 'const' } },
+            { data: { id: 'CON03', label: 'Ministración', code: 'MIN-CON-PRO-03', type: 'const' } },
+            { data: { id: 'CON07', label: 'Presentación\nAvance Obra', code: 'MIN-CON-PRO-07', type: 'const' } },
+            { data: { id: 'CON08', label: 'Presentación\nDirección', code: 'MIN-CON-PRO-08', type: 'const' } },
+
+            // Closeout / Post
+            { data: { id: 'CIE02', label: 'Cierre\nAdmin-Fin', code: 'MIN-CIE-PRO-02', type: 'post' } },
+            { data: { id: 'CIE06', label: 'Entrega Áreas\nComunes', code: 'MIN-CIE-PRO-06', type: 'post' } },
+            { data: { id: 'CIE05', label: 'Entrega\nPrivativas', code: 'MIN-CIE-PRO-05', type: 'post' } },
+            { data: { id: 'CIE01', label: 'Titulación', code: 'MIN-CIE-PRO-01', type: 'post' } },
+            { data: { id: 'POS04', label: 'Entrega\nInmueble', code: 'MIN-POS-PRO-04', type: 'post' } },
+            { data: { id: 'POS01', label: 'Atención\nCliente', code: 'MIN-POS-PRO-01', type: 'post' } },
+            { data: { id: 'POS02', label: 'Garantías', code: 'MIN-POS-PRO-02', type: 'post' } },
+
+            // EDGES (Flow Logic)
+            // Design Phase Flow
+            { data: { source: 'PRE01', target: 'DIS02' } },
+            { data: { source: 'DIS02', target: 'DIS03' } },
+            { data: { source: 'DIS02', target: 'DIS04' } },
+            { data: { source: 'DIS03', target: 'DIS05' } },
+            { data: { source: 'DIS03', target: 'PRC01' } }, // WBS feeds Strategy
+            { data: { source: 'DIS04', target: 'PRC02' } }, // Project APC feeds Contracts
+            
+            // To Precon
+            { data: { source: 'DIS05', target: 'PRC01' } },
+            { data: { source: 'DIS05', target: 'DIS06' } }, // Budget needed for start
+            { data: { source: 'DIS01', target: 'DIS06' } }, // Permits needed for start
+            
+            // Inside Precon
+            { data: { source: 'PRC01', target: 'PRC02' } },
+            { data: { source: 'PRC01', target: 'PRC03' } },
+            { data: { source: 'PRC01', target: 'PRC04' } },
+            { data: { source: 'PRC02', target: 'PRC05' } }, // Contract -> Kickoff
+            
+            // To Construction
+            { data: { source: 'DIS06', target: 'PRC05' } }, // Liberation -> Kickoff
+            { data: { source: 'PRC05', target: 'CON06' } }, // Kickoff -> Supervision
+            { data: { source: 'PRC02', target: 'CON06' } }, //  -> Supervision
+            { data: { source: 'PRC03', target: 'CON06' } }, //  -> Supervision
+            { data: { source: 'PRC04', target: 'CON06' } }, //  -> Supervision
+            
+            // Inside Construction
+            { data: { source: 'CON06', target: 'CON01' } }, // Supervision -> Progress Update
+            { data: { source: 'CON06', target: 'CON04' } }, // Supervision -> Estimations
+            { data: { source: 'CON06', target: 'CIE02' } }, // Supervision -> Contractor Closeout
+            { data: { source: 'CON01', target: 'CON04' } }, // AFC -> Estimations
+            { data: { source: 'CON04', target: 'CON02' } }, // Estimations -> Payments
+            { data: { source: 'CON01', target: 'CON03' } }, // AFC -> Ministracion
+            { data: { source: 'CON01', target: 'CON07' } }, // AFC -> Weekly Report
+            { data: { source: 'CON02', target: 'CON08' } }, // Financials -> Directors Report
+            { data: { source: 'CON07', target: 'CON08' } }, 
+            
+            // Loops
+            { data: { source: 'CON06', target: 'CON05' } }, // Supervision -> Change
+            { data: { source: 'CON05', target: 'DIS05' } }, // Change -> Updates Budget
+            
+            // To Closeout
+            { data: { source: 'CON06', target: 'CIE06' } }, // Common Areas
+            { data: { source: 'CON06', target: 'CIE05' } }, // Private Areas
+            { data: { source: 'CON02', target: 'CIE02' } }, // Payments -> Finiquito
+            
+            // To Post
+            { data: { source: 'DIS01', target: 'CIE01' } }, // Tramites -> Titulacion
+            { data: { source: 'CIE01', target: 'POS04' } }, // Titulacion -> Handover
+            { data: { source: 'CIE05', target: 'POS04' } }, // Tech Close -> Handover
+            { data: { source: 'POS04', target: 'POS01' } }, // Handover -> Client Service
+            { data: { source: 'POS01', target: 'POS02' } }  // Service -> Warranties
+        ];
+
+        // Initialize Cytoscape
+        var cy = cytoscape({
+            container: document.getElementById('cy'),
+            elements: elements,
+            
+            style: [
+                {
+                    selector: 'node',
+                    style: {
+                        'label': 'data(label)',
+                        'width': 240,
+                        'height': 60,
+                        'shape': 'round-rectangle',
+                        'background-color': '#1e1e1e',
+                        'border-width': 2,
+                        'border-opacity': 1,
+                        'text-valign': 'center',
+                        'text-halign': 'center',
+                        'text-wrap': 'wrap',
+                        'color': '#fff',
+                        'font-size': '12px',
+                        'font-weight': '500',
+                        'font-family': 'Inter',
+                        'text-max-width': 220,
+                        'line-height': 1.4,
+                        'transition-property': 'background-color, border-width, width, height',
+                        'transition-duration': '0.3s'
+                    }
+                },
+                // Color coding based on type
+                {
+                    selector: 'node[type="design"]',
+                    style: {
+                        'border-color': '#1e6eb6', // Blue
+                        'shadow-blur': 15,
+                        'shadow-color': '#1e6eb6',
+                        'shadow-opacity': 0.2
+                    }
+                },
+                {
+                    selector: 'node[type="precon"]',
+                    style: {
+                        'border-color': '#06b4ba', // Cyan
+                        'shadow-blur': 15,
+                        'shadow-color': '#06b4ba',
+                        'shadow-opacity': 0.2
+                    }
+                },
+                {
+                    selector: 'node[type="const"]',
+                    style: {
+                        'border-color': '#e50774', // Pink
+                        'shadow-blur': 15,
+                        'shadow-color': '#e50774',
+                        'shadow-opacity': 0.2
+                    }
+                },
+                {
+                    selector: 'node[type="post"]',
+                    style: {
+                        'border-color': '#9b59b6', // Mix (Purple)
+                        'shadow-blur': 15,
+                        'shadow-color': '#9b59b6',
+                        'shadow-opacity': 0.2
+                    }
+                },
+                {
+                    selector: 'edge',
+                    style: {
+                        'width': 2,
+                        'line-color': '#444',
+                        'target-arrow-color': '#444',
+                        'target-arrow-shape': 'triangle',
+                        'curve-style': 'bezier',
+                        'arrow-scale': 1.2
+                    }
+                },
+                {
+                    selector: ':selected',
+                    style: {
+                        'border-width': 4,
+                        'background-color': '#2a2a2a',
+                        'width': 170,
+                        'height': 70
+                    }
+                }
+            ],
+
+            layout: {
+                name: 'dagre',
+                rankDir: 'LR', // Left to Right
+                spacingFactor: 1.2,
+                nodeSep: 50,
+                rankSep: 150
+            }
+        });
+
+        // Interaction Logic
+        cy.on('tap', 'node', function(evt){
+            var node = evt.target;
+            var code = node.data('code');
+            
+            // Get data
+            const data = processData[code];
+            
+            if(data) {
+                openInspector(data, code);
+            } else {
+                // Fallback if data missing
+                openInspector({
+                    title: node.data('label').replace('\n', ' '),
+                    inputs: ["Input genérico"],
+                    outputs: ["Output genérico"]
+                }, code);
+            }
+        });
+
+        cy.on('tap', function(event){
+            if(event.target === cy){
+                closeInspector();
+            }
+        });
+
+        function openInspector(data, code) {
+            const panel = document.getElementById('inspector');
+            const title = document.getElementById('panel-title');
+            const codeDisplay = document.getElementById('panel-code');
+            const inputs = document.getElementById('input-list');
+            const outputs = document.getElementById('output-list');
+
+            // Populate Data
+            title.textContent = data.title;
+            codeDisplay.textContent = code;
+            
+            // Colors for header border
+            let borderColor = '#333';
+            if(data.category === 'design') borderColor = '#1e6eb6';
+            if(data.category === 'precon') borderColor = '#06b4ba';
+            if(data.category === 'const') borderColor = '#e50774';
+            if(data.category === 'post') borderColor = '#9b59b6';
+            
+            panel.style.borderColor = borderColor;
+
+            // Clear Lists
+            inputs.innerHTML = '';
+            outputs.innerHTML = '';
+
+            // Add Inputs
+            data.inputs.forEach(item => {
+                const li = document.createElement('li');
+                li.className = 'io-item input';
+                li.innerHTML = `<i class="fa-regular fa-file artifact-icon"></i> ${item}`;
+                inputs.appendChild(li);
+            });
+
+            // Add Outputs
+            data.outputs.forEach(item => {
+                const li = document.createElement('li');
+                li.className = 'io-item output';
+                li.innerHTML = `<i class="fa-solid fa-file-signature artifact-icon"></i> ${item}`;
+                outputs.appendChild(li);
+            });
+
+            // Show Panel
+            panel.classList.add('active');
+        }
+
+        function closeInspector() {
+            document.getElementById('inspector').classList.remove('active');
+            cy.$(':selected').unselect();
+        }
+
+    </script>
+</body>
+</html>

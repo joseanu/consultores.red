@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control de Inversión RΞD</title>
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Inter:wght@300;400&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0b0c10;
+            --cyan: #06b4ba;
+            --pink: #e50774;
+            --blue: #1e6eb6;
+            --white: #ffffff;
+            --glass: rgba(20, 20, 30, 0.8);
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg);
+            color: var(--white);
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        /* UI Overlay */
+        .ui-layer {
+            position: absolute;
+            z-index: 10;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .header {
+            position: absolute;
+            top: 30px;
+            left: 40px;
+        }
+
+        h1 {
+            font-family: 'Rajdhani', sans-serif;
+            font-weight: 700;
+            font-size: 42px;
+            margin: 0;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            background: linear-gradient(90deg, var(--white), var(--cyan));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            color: var(--blue);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            margin-top: 5px;
+        }
+
+        /* Metrics Panel */
+        .metrics {
+            position: absolute;
+            top: 30px;
+            right: 40px;
+            display: flex;
+            gap: 30px;
+        }
+
+        .metric-item {
+            text-align: right;
+        }
+
+        .metric-value {
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--white);
+        }
+
+        .metric-label {
+            font-size: 10px;
+            color: #888;
+            text-transform: uppercase;
+        }
+
+        .cyan-text { color: var(--cyan); text-shadow: 0 0 10px rgba(6,180,186,0.5); }
+        .pink-text { color: var(--pink); text-shadow: 0 0 10px rgba(229,7,116,0.5); }
+
+        /* Gate Labels (Positioned absolutely over canvas nodes) */
+        .gate-label {
+            position: absolute;
+            pointer-events: auto; /* Allow hovering */
+            transform: translate(-50%, -50%);
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .gate-title {
+            font-family: 'Rajdhani', sans-serif;
+            font-weight: 600;
+            font-size: 14px;
+            letter-spacing: 1px;
+            background: rgba(0,0,0,0.6);
+            padding: 4px 10px;
+            border-radius: 4px;
+            border: 1px solid rgba(255,255,255,0.1);
+            backdrop-filter: blur(4px);
+            margin-bottom: 70px; /* Push above the node */
+            text-transform: uppercase;
+        }
+
+        .gate-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            border: 2px solid rgba(255,255,255,0.1);
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+
+        /* Tooltip Card */
+        .info-card {
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%) translateY(20px);
+            width: 500px;
+            background: rgba(15, 20, 25, 0.9);
+            border: 1px solid var(--blue);
+            border-left: 4px solid var(--pink);
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            opacity: 0;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            backdrop-filter: blur(10px);
+        }
+
+        .info-card.active {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: 10px;
+        }
+
+        .card-title {
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--cyan);
+        }
+
+        .card-tag {
+            font-size: 10px;
+            background: var(--pink);
+            padding: 2px 6px;
+            border-radius: 2px;
+            font-weight: 700;
+        }
+
+        .card-body {
+            font-size: 13px;
+            line-height: 1.5;
+            color: #ccc;
+        }
+
+        .card-risk {
+            margin-top: 10px;
+            font-size: 12px;
+            color: #888;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .card-risk span { color: var(--pink); font-weight: bold; }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="flowCanvas"></canvas>
+
+    <div class="ui-layer">
+        <div class="header">
+            <h1>Ecosistema de Control</h1>
+            <div class="subtitle">Trazabilidad Financiera: De la Planeación al Pago</div>
+        </div>
+
+        <div class="metrics">
+            <div class="metric-item">
+                <div class="metric-value cyan-text">100%</div>
+                <div class="metric-label">Trazabilidad</div>
+            </div>
+            <div class="metric-item">
+                <div class="metric-value pink-text">0</div>
+                <div class="metric-label">Pagos sin Soporte</div>
+            </div>
+        </div>
+
+        <!-- Tooltip Container -->
+        <div id="infoCard" class="info-card">
+            <div class="card-header">
+                <div class="card-title" id="cardTitle">Titulo</div>
+                <div class="card-tag" id="cardTag">CONTROL</div>
+            </div>
+            <div class="card-body" id="cardBody">
+                Descripción del proceso.
+            </div>
+            <div class="card-risk" id="cardRisk">
+                <span>MITIGA:</span> <div id="cardRiskText">Riesgo</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- DOM Elements for Interactive Nodes (Overlay) -->
+    <div id="nodeContainer" class="ui-layer"></div>
+
+    <script>
+        /**
+         * CONFIGURATION
+         */
+        const colors = {
+            cyan: '#06b4ba',
+            pink: '#e50774',
+            blue: '#1e6eb6',
+            dark: '#0b0c10',
+            light: '#ffffff'
+        };
+
+        // The Data Structure for the Budget Control Flow
+        const nodes = [
+            { 
+                id: 1, label: "WBS & Alcance", 
+                x: 0.1, y: 0.5, color: colors.blue,
+                desc: "Define la estructura total. Si no existe aquí, no tiene presupuesto.",
+                risk: "Alcance no definido (Scope Creep)" 
+            },
+            { 
+                id: 2, label: "Presupuesto Base", 
+                x: 0.25, y: 0.5, color: colors.blue,
+                desc: "La Línea Base financiera autorizada. Fija el techo de inversión y la contingencia.",
+                risk: "Pérdida de rentabilidad esperada"
+            },
+            { 
+                id: 3, label: "Comparativa & Contrato", 
+                x: 0.45, y: 0.5, color: colors.cyan,
+                desc: "Compromiso legal. Valida precios de mercado vs Presupuesto Base antes de firmar.",
+                risk: "Contratación por encima de presupuesto"
+            },
+            { 
+                id: 4, label: "Avance Certificado (AFC)", 
+                x: 0.65, y: 0.3, color: colors.pink, // Branch UP
+                desc: "Validación física en campo por Calidad. El único disparador válido para un pago.",
+                risk: "Pago por trabajos mal ejecutados o inexistentes"
+            },
+            { 
+                id: 5, label: "Control de Cambios", 
+                x: 0.65, y: 0.7, color: colors.pink, // Branch DOWN
+                desc: "Gestión de desviaciones. Única vía para usar contingencia o modificar contratos.",
+                risk: "Sobrecostos no autorizados"
+            },
+            { 
+                id: 6, label: "Estimación & Pago", 
+                x: 0.85, y: 0.5, color: colors.cyan,
+                desc: "Conciliación financiera. Amortiza anticipos y retiene garantías automáticamente.",
+                risk: "Descapitalización del proyecto"
+            }
+        ];
+
+        /**
+         * SETUP CANVAS
+         */
+        const canvas = document.getElementById('flowCanvas');
+        const ctx = canvas.getContext('2d');
+        let width, height;
+        let particles = [];
+        let hoveredNode = null;
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            createDomNodes(); // Re-position labels on resize
+        }
+        window.addEventListener('resize', resize);
+
+        /**
+         * DOM NODES (Interactive Elements)
+         */
+        function createDomNodes() {
+            const container = document.getElementById('nodeContainer');
+            container.innerHTML = '';
+
+            nodes.forEach((node, index) => {
+                const el = document.createElement('div');
+                el.className = 'gate-label';
+                el.style.left = (node.x * width) + 'px';
+                el.style.top = (node.y * height) + 'px';
+                
+                el.innerHTML = `
+                    <div class="gate-title" style="border-color:${node.color}; color:${colors.light}">${node.label}</div>
+                    <div class="gate-icon"></div>
+                `;
+
+                // Hover Events
+                el.addEventListener('mouseenter', () => {
+                    hoveredNode = index;
+                    showCard(node);
+                });
+                el.addEventListener('mouseleave', () => {
+                    hoveredNode = null;
+                    hideCard();
+                });
+
+                container.appendChild(el);
+            });
+        }
+
+        function showCard(node) {
+            const card = document.getElementById('infoCard');
+            document.getElementById('cardTitle').innerText = node.label;
+            document.getElementById('cardTitle').style.color = node.color;
+            document.getElementById('cardBody').innerText = node.desc;
+            document.getElementById('cardRiskText').innerText = node.risk;
+            card.classList.add('active');
+        }
+
+        function hideCard() {
+            document.getElementById('infoCard').classList.remove('active');
+        }
+
+        /**
+         * PARTICLE SYSTEM
+         */
+        class Particle {
+            constructor() {
+                this.reset();
+            }
+
+            reset() {
+                this.x = nodes[0].x * width;
+                this.y = nodes[0].y * height;
+                this.targetIndex = 1;
+                this.speed = Math.random() * 2 + 1;
+                this.size = Math.random() * 2 + 1;
+                this.alpha = Math.random() * 0.5 + 0.5;
+                // Determine path (Main flow or Change Mgmt flow)
+                this.pathType = Math.random() > 0.8 ? 'change' : 'main'; 
+            }
+
+            update() {
+                if (this.targetIndex >= nodes.length) {
+                    this.reset();
+                    return;
+                }
+
+                // Logic to follow the graph path
+                let currentTargetIndex = this.targetIndex;
+                
+                // Route handling for branching
+                // Node 3 (Contract) splits to 4 (AFC) and 5 (Change)
+                if(this.targetIndex === 3) {
+                    if (this.pathType === 'main') currentTargetIndex = 3; // Go to AFC (Index 3 in array is AFC? No, wait)
+                    // Let's map indices: 0->1->2-> [3 or 4] -> 5
+                    // Array: 0(WBS), 1(Base), 2(Contract), 3(AFC), 4(Change), 5(Pay)
+                }
+
+                // Custom Logic for simple linear + branch visual
+                // Path A: 0 -> 1 -> 2 -> 3 -> 5
+                // Path B: 0 -> 1 -> 2 -> 4 -> 5 (Rare - Change Mgmt)
+                
+                let tNode;
+                
+                if (this.pathType === 'change' && this.targetIndex === 3) {
+                    tNode = nodes[4]; // Go to Change Mgmt
+                } else if (this.pathType === 'change' && this.targetIndex === 4) {
+                    // Logic fix: from change back to main stream
+                    tNode = nodes[5];
+                } else if (this.pathType === 'main' && this.targetIndex === 4) {
+                     // Main stream skips node 4 (Change mgmt) if current is 3
+                     // Wait, array index 3 is AFC. 
+                     // Let's simplify: 
+                     // Array: 0,1,2,3,4,5
+                     // 2 connects to 3 and 4. 
+                     // 3 connects to 5.
+                     // 4 connects to 5 (conceptually budget update, but visually to payment/close).
+                     
+                     tNode = nodes[this.targetIndex];
+                } else {
+                    tNode = nodes[this.targetIndex];
+                }
+                
+                // If we are at the end
+                if(!tNode) { this.reset(); return; }
+
+                const tx = tNode.x * width;
+                const ty = tNode.y * height;
+                const dx = tx - this.x;
+                const dy = ty - this.y;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+
+                // Move
+                if (dist < 5) {
+                    // Arrived at node
+                    // Logic: If hovering this node, pause particles (simulation of "Audit")
+                    if (hoveredNode === this.targetIndex) {
+                        this.alpha = 1;
+                        this.size = 4; // Highlight
+                        return; // Stop moving
+                    }
+
+                    // Advance
+                    if(this.pathType === 'change' && this.targetIndex === 2) {
+                        this.targetIndex = 4; // Jump to Change Control
+                    } else if (this.pathType === 'change' && this.targetIndex === 4) {
+                        this.targetIndex = 5; // Rejoin at Pay
+                    } else if (this.pathType === 'main' && this.targetIndex === 2) {
+                        this.targetIndex = 3; // Go to AFC
+                    } else if (this.pathType === 'main' && this.targetIndex === 3) {
+                        this.targetIndex = 5; // Go to Pay
+                    } else {
+                        this.targetIndex++;
+                    }
+                } else {
+                    const angle = Math.atan2(dy, dx);
+                    this.x += Math.cos(angle) * this.speed;
+                    this.y += Math.sin(angle) * this.speed;
+                }
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                
+                // Color based on segment
+                if (this.targetIndex <= 2) ctx.fillStyle = colors.blue;
+                else if (this.targetIndex === 4) ctx.fillStyle = colors.pink; // Change mgmt is alert color
+                else ctx.fillStyle = colors.cyan;
+
+                ctx.globalAlpha = this.alpha;
+                ctx.fill();
+                ctx.globalAlpha = 1;
+            }
+        }
+
+        /**
+         * RENDERING
+         */
+        function drawConnections() {
+            ctx.lineWidth = 2;
+            ctx.lineCap = 'round';
+            
+            // Draw Main Line (0 -> 1 -> 2 -> 3 -> 5)
+            drawPath([0, 1, 2, 3, 5], colors.blue, 0.2);
+            
+            // Draw Change Line (2 -> 4 -> 5)
+            drawPath([2, 4, 5], colors.pink, 0.15); // Fainter
+        }
+
+        function drawPath(indices, color, alpha) {
+            ctx.beginPath();
+            ctx.strokeStyle = color;
+            ctx.globalAlpha = alpha;
+            
+            const start = nodes[indices[0]];
+            ctx.moveTo(start.x * width, start.y * height);
+
+            for(let i=1; i<indices.length; i++) {
+                const n = nodes[indices[i]];
+                ctx.lineTo(n.x * width, n.y * height);
+            }
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+        }
+
+        function drawNodes() {
+            nodes.forEach((node, index) => {
+                const x = node.x * width;
+                const y = node.y * height;
+                
+                // Glow
+                const grad = ctx.createRadialGradient(x, y, 0, x, y, 40);
+                grad.addColorStop(0, node.color);
+                grad.addColorStop(1, 'transparent');
+                
+                ctx.fillStyle = grad;
+                ctx.globalAlpha = 0.3;
+                if(hoveredNode === index) ctx.globalAlpha = 0.6; // Hover effect
+                
+                ctx.beginPath();
+                ctx.arc(x, y, 40, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1;
+
+                // Center Dot
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(x, y, 3, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        function animate() {
+            ctx.clearRect(0, 0, width, height);
+            
+            // Background grid
+            ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+            ctx.lineWidth = 1;
+            const gridSize = 50;
+            // Simple grid logic skipped for brevity, keeping clean black background
+
+            drawConnections();
+            drawNodes();
+
+            particles.forEach(p => {
+                p.update();
+                p.draw();
+            });
+
+            requestAnimationFrame(animate);
+        }
+
+        /**
+         * INIT
+         */
+        resize();
+        createDomNodes();
+        
+        // Create 200 particles
+        for(let i=0; i<200; i++) {
+            setTimeout(() => {
+                particles.push(new Particle());
+            }, i * 30);
+        }
+
+        animate();
+
+    </script>
+</body>
+</html>
